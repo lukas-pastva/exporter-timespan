@@ -25,6 +25,13 @@ declare -a METRICS=()
 # Function to add metrics to the array without duplication
 metric_add() {
     local metric="$1"
+    for existing_metric in "${METRICS[@]}"; do
+        if [[ "$existing_metric" == "$metric" ]]; then
+            echo "Duplicate metric found, not adding: $metric" >&2
+            return
+        fi
+    done
+    # echo "Adding metric: $metric" >&2
     METRICS+=("$metric")
 }
 
@@ -48,18 +55,27 @@ collect_metrics() {
                         UNIT="d"
                         ;;
                     "weeks")
-                        UNIT="w"
+                        UNIT="$((i * 7))d"  # Weeks converted to days
                         ;;
                     "months")
-                        UNIT="m"
+                        UNIT="$((i * 30))d"  # Approximate month as 30 days
                         ;;
                     "years")
-                        UNIT="y"
+                        UNIT="$((i * 365))d"  # Approximate year as 365 days
                         ;;
                 esac
 
                 # Build the Prometheus query
-                QUERY="sum_over_time(${METRIC_NAME}[${i}${UNIT}])"
+                QUERY="sum_over_time(${METRIC_NAME}[${UNIT}])"
+
+                # Ensure the time range does not exceed the START_DATE
+                END_TIMESTAMP=$(date +%s)
+                TIME_RANGE=$((END_TIMESTAMP - START_TIMESTAMP))
+                UNIT_SECONDS=$(( $(date -d "${UNIT}" +%s) - $(date -d "0" +%s) ))
+                if (( UNIT_SECONDS > TIME_RANGE )); then
+                    # Skip if the time range exceeds data since START_DATE
+                    continue
+                fi
 
                 # URL encode the query
                 ENCODED_QUERY=$(echo -n "$QUERY" | jq -sRr @uri)
