@@ -10,7 +10,7 @@ ENV APP_DIR=/app
 WORKDIR ${APP_DIR}
 
 # Copy go.mod and go.sum files first for better caching
-COPY ./go.mod ./src/go.sum ./
+COPY ./go.mod ./go.sum ./
 
 # Download dependencies
 RUN go mod download
