@@ -5,6 +5,8 @@ CONFIG_FILE="${CONFIG_FILE:-config.yaml}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://prometheus-operated.monitoring:9090}"
 OUTPUT_FILE="${OUTPUT_FILE:-/tmp/metrics.log}"
 
+STEP="5m"
+
 # Function to escape label values for Prometheus
 escape_label_value() {
     local val="$1"
@@ -91,7 +93,6 @@ collect_metrics() {
             ENCODED_QUERY=$(echo -n "$QUERY" | jq -sRr @uri)
             ENCODED_START=$(date -d "@$WINDOW_START_TS" -u +"%Y-%m-%dT%H:%M:%SZ")
             ENCODED_END=$(date -d "@$WINDOW_END_TS" -u +"%Y-%m-%dT%H:%M:%SZ")
-            STEP="1h"  # Adjust as needed
             ENCODED_STEP=$(echo -n "$STEP" | jq -sRr @uri)
 
             # Build the full URL
