@@ -39,13 +39,14 @@ collect_metrics() {
     metrics_count=$(yq e '.metrics | length' "$CONFIG_FILE")
 
     for (( idx=0; idx<metrics_count; idx++ )); do
-        local metric_name
+        local metric_query
         local aggregation
         local time_window_start
         local time_window_end
         local metric_start_date
 
         metric_name=$(yq e ".metrics[$idx].name" "$CONFIG_FILE")
+        metric_query=$(yq e ".metrics[$idx].query" "$CONFIG_FILE")
         aggregation=$(yq e ".metrics[$idx].aggregation" "$CONFIG_FILE")
         time_window_start=$(yq e ".metrics[$idx].time_window.start" "$CONFIG_FILE")
         time_window_end=$(yq e ".metrics[$idx].time_window.end" "$CONFIG_FILE")
@@ -59,7 +60,7 @@ collect_metrics() {
         # Calculate the number of days to process
         DAYS_TO_PROCESS=$(( (CURRENT_TIMESTAMP - START_TIMESTAMP) / 86400 ))
         if (( DAYS_TO_PROCESS < 0 )); then
-            echo "Start date is in the future, skipping metric: $metric_name" >&2
+            echo "Start date is in the future, skipping metric: $metric_query" >&2
             continue
         fi
 
@@ -93,7 +94,7 @@ collect_metrics() {
             fi
 
             # Build the Prometheus query
-            QUERY="$metric_name"
+            QUERY="$metric_query"
 
             # URL encode query parameters
             ENCODED_QUERY=$(echo -n "$QUERY" | jq -sRr @uri)
@@ -167,7 +168,7 @@ collect_metrics() {
 
                 # **Add Check Here: Skip if not enough data**
                 if (( DAYS_TO_SUM > DAYS_TO_PROCESS )); then
-                    echo "Insufficient data for ${metric_name} with timespan ${TIMESCALE} (i=${i}). Required days: ${DAYS_TO_SUM}, Available days: ${DAYS_TO_PROCESS}. Skipping." >&2
+                    echo "Insufficient data for ${metric_query} with timespan ${TIMESCALE} (i=${i}). Required days: ${DAYS_TO_SUM}, Available days: ${DAYS_TO_PROCESS}. Skipping." >&2
                     continue
                 fi
 
