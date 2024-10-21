@@ -6,6 +6,8 @@ PROMETHEUS_URL="${PROMETHEUS_URL:-http://prometheus-operated.monitoring:9090}"
 OUTPUT_FILE="${OUTPUT_FILE:-/tmp/metrics.log}"
 STEP="${STEP:-5m}"
 
+STEP="5m"
+
 # Function to escape label values for Prometheus
 escape_label_value() {
     local val="$1"
