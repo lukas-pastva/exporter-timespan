@@ -4,6 +4,7 @@
 CONFIG_FILE="${CONFIG_FILE:-config.yaml}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://prometheus-operated.monitoring:9090}"
 OUTPUT_FILE="${OUTPUT_FILE:-/tmp/metrics.log}"
+STEP="${STEP:-5m}"
 
 # Function to escape label values for Prometheus
 escape_label_value() {
@@ -55,6 +56,11 @@ collect_metrics() {
 
         # Calculate the number of days to process
         DAYS_TO_PROCESS=$(( (CURRENT_TIMESTAMP - START_TIMESTAMP) / 86400 ))
+        if (( DAYS_TO_PROCESS < 0 )); then
+            echo "Start date is in the future, skipping metric: $metric_name" >&2
+            continue
+        fi
+
         if (( DAYS_TO_PROCESS > 730 )); then
             DAYS_TO_PROCESS=730  # Limit to 2 years (730 days)
         fi
@@ -91,7 +97,6 @@ collect_metrics() {
             ENCODED_QUERY=$(echo -n "$QUERY" | jq -sRr @uri)
             ENCODED_START=$(date -d "@$WINDOW_START_TS" -u +"%Y-%m-%dT%H:%M:%SZ")
             ENCODED_END=$(date -d "@$WINDOW_END_TS" -u +"%Y-%m-%dT%H:%M:%SZ")
-            STEP="1h"  # Adjust as needed
             ENCODED_STEP=$(echo -n "$STEP" | jq -sRr @uri)
 
             # Build the full URL
@@ -158,12 +163,22 @@ collect_metrics() {
                         ;;
                 esac
 
+                # **Add Check Here: Skip if not enough data**
+                if (( DAYS_TO_SUM > DAYS_TO_PROCESS )); then
+                    echo "Insufficient data for ${metric_name} with timespan ${TIMESCALE} (i=${i}). Required days: ${DAYS_TO_SUM}, Available days: ${DAYS_TO_PROCESS}. Skipping." >&2
+                    continue
+                fi
+
+                # Proceed with calculating the sum
+                START_DAY_OFFSET=$(( DAYS_TO_PROCESS - DAYS_TO_SUM + 1 ))
+                if (( START_DAY_OFFSET < 0 )); then
+                    START_DAY_OFFSET=0
+                fi
+
                 SUM=0
-                for (( day_offset=(DAYS_TO_PROCESS - DAYS_TO_SUM + 1); day_offset<=DAYS_TO_PROCESS; day_offset++ )); do
-                    if (( day_offset >= 0 )); then
-                        VALUE="${daily_values[$day_offset]:-0}"
-                        SUM=$(echo "$SUM + $VALUE" | bc)
-                    fi
+                for (( day_offset=START_DAY_OFFSET; day_offset<=DAYS_TO_PROCESS; day_offset++ )); do
+                    VALUE="${daily_values[$day_offset]:-0}"
+                    SUM=$(echo "$SUM + $VALUE" | bc)
                 done
 
                 # Generate the new metric line
