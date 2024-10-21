@@ -6,8 +6,6 @@ PROMETHEUS_URL="${PROMETHEUS_URL:-http://prometheus-operated.monitoring:9090}"
 OUTPUT_FILE="${OUTPUT_FILE:-/tmp/metrics.log}"
 STEP="${STEP:-5m}"
 
-STEP="5m"
-
 # Function to escape label values for Prometheus
 escape_label_value() {
     local val="$1"
@@ -143,18 +141,24 @@ collect_metrics() {
             daily_values["$day_offset"]="$VALUE"
         done
 
-        # Timespans definitions
+        # **Handle Per Day Metrics Separately**
+        for (( day_offset=0; day_offset<=DAYS_TO_PROCESS; day_offset++ )); do
+            TARGET_DATE=$(date -d "$START_DATE +$day_offset day" +"%Y-%m-%d")
+            VALUE="${daily_values[$day_offset]:-0}"
+            # Example metric format: metric_name{date="2024-10-10"} 123
+            NEW_METRIC="${metric_name}_day{date=\"${TARGET_DATE}\"} ${VALUE}"
+            metric_add "$NEW_METRIC"
+        done
+
+        # **Define TIMESCALES Without "days"**
         declare -A TIMESCALES
-        TIMESCALES=( ["days"]=30 ["weeks"]=4 ["months"]=12 ["years"]=2 )
+        TIMESCALES=( ["weeks"]=52 ["months"]=12 ["years"]=2 )
 
         # For each timespan, sum the daily values
         for TIMESCALE in "${!TIMESCALES[@]}"; do
             MAX_VALUE="${TIMESCALES[$TIMESCALE]}"
             for (( i=1; i<=MAX_VALUE; i++ )); do
                 case $TIMESCALE in
-                    "days")
-                        DAYS_TO_SUM=$i
-                        ;;
                     "weeks")
                         DAYS_TO_SUM=$((i * 7))
                         ;;
