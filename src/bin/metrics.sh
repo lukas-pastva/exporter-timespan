@@ -146,7 +146,7 @@ collect_metrics() {
             TARGET_DATE=$(date -d "$START_DATE +$day_offset day" +"%Y-%m-%d")
             VALUE="${daily_values[$day_offset]:-0}"
             # Example metric format: metric_name{date="2024-10-10"} 123
-            NEW_METRIC="${metric_name}_day{in_past=\"${day_offset}\"} ${VALUE}"
+            NEW_METRIC="${metric_name}_timespan_days{in_past=\"${day_offset}\"} ${VALUE}"
             metric_add "$NEW_METRIC"
         done
 
