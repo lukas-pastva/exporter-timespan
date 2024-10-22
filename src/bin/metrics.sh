@@ -70,8 +70,8 @@ collect_metrics() {
 
         # Collect daily values
         for (( day_offset=0; day_offset<=DAYS_TO_PROCESS; day_offset++ )); do
-            # Calculate the date for the current offset
-            TARGET_DATE=$(date -d "$START_DATE +$day_offset day" +"%Y-%m-%d")
+            REVERSED_OFFSET=$(( DAYS_TO_PROCESS - day_offset ))
+            TARGET_DATE=$(date -d "$START_DATE +$REVERSED_OFFSET day" +"%Y-%m-%d")
 
             # Calculate the start and end times for the time window on that day
             WINDOW_START="${TARGET_DATE}T${time_window_start}:00Z"
@@ -137,13 +137,11 @@ collect_metrics() {
                 fi
             fi
 
-            # Store the daily value
             daily_values["$day_offset"]="$VALUE"
         done
 
         # **Handle Per Day Metrics Separately**
         for (( day_offset=0; day_offset<=DAYS_TO_PROCESS; day_offset++ )); do
-            TARGET_DATE=$(date -d "$START_DATE +$day_offset day" +"%Y-%m-%d")
             VALUE="${daily_values[$day_offset]:-0}"
             # Example metric format: metric_name{date="2024-10-10"} 123
             NEW_METRIC="${metric_name}_timespan_days{in_past=\"${day_offset}\"} ${VALUE}"
@@ -163,27 +161,26 @@ collect_metrics() {
                         DAYS_TO_SUM=$((i * 7))
                         ;;
                     "months")
-                        DAYS_TO_SUM=$((i * 30))  # Approximate
+                        DAYS_TO_SUM=$((i * 30))
                         ;;
                     "years")
-                        DAYS_TO_SUM=$((i * 365))  # Approximate
+                        DAYS_TO_SUM=$((i * 365))
                         ;;
                 esac
 
-                # **Add Check Here: Skip if not enough data**
-                if (( DAYS_TO_SUM > DAYS_TO_PROCESS )); then
-                    echo "Insufficient data for ${metric_query} with timespan ${TIMESCALE} (i=${i}). Required days: ${DAYS_TO_SUM}, Available days: ${DAYS_TO_PROCESS}. Skipping." >&2
+                # Adjust the check to ensure we have enough data
+                if (( DAYS_TO_SUM > (DAYS_TO_PROCESS + 1) )); then
                     continue
                 fi
 
-                # Proceed with calculating the sum
-                START_DAY_OFFSET=$(( DAYS_TO_PROCESS - DAYS_TO_SUM + 1 ))
-                if (( START_DAY_OFFSET < 0 )); then
-                    START_DAY_OFFSET=0
+                # Set the maximum day offset to sum
+                MAX_DAY_OFFSET=$(( DAYS_TO_SUM - 1 ))
+                if (( MAX_DAY_OFFSET > DAYS_TO_PROCESS )); then
+                    MAX_DAY_OFFSET=$DAYS_TO_PROCESS
                 fi
 
                 SUM=0
-                for (( day_offset=START_DAY_OFFSET; day_offset<=DAYS_TO_PROCESS; day_offset++ )); do
+                for (( day_offset=0; day_offset<=MAX_DAY_OFFSET; day_offset++ )); do
                     VALUE="${daily_values[$day_offset]:-0}"
                     SUM=$(echo "$SUM + $VALUE" | bc)
                 done
