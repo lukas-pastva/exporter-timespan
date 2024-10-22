@@ -55,7 +55,6 @@ collect_metrics() {
         START_TIMESTAMP=$(date -d "$START_DATE" +%s)
         CURRENT_TIMESTAMP=$(date +%s)
 
-        # Calculate the number of days to process
         DAYS_TO_PROCESS=$(( (CURRENT_TIMESTAMP - START_TIMESTAMP) / 86400 ))
         if (( DAYS_TO_PROCESS < 0 )); then
             echo "Start date is in the future, skipping metric: $metric_query" >&2
@@ -70,8 +69,7 @@ collect_metrics() {
 
         # Collect daily values
         for (( day_offset=0; day_offset<=DAYS_TO_PROCESS; day_offset++ )); do
-            REVERSED_OFFSET=$(( DAYS_TO_PROCESS - day_offset ))
-            TARGET_DATE=$(date -d "$START_DATE +$REVERSED_OFFSET day" +"%Y-%m-%d")
+            TARGET_DATE=$(date -d "today - $day_offset day" +"%Y-%m-%d")
 
             # Calculate the start and end times for the time window on that day
             WINDOW_START="${TARGET_DATE}T${time_window_start}:00Z"
@@ -81,14 +79,14 @@ collect_metrics() {
             WINDOW_START_TS=$(date -d "$WINDOW_START" +%s)
             WINDOW_END_TS=$(date -d "$WINDOW_END" +%s)
 
-            # Skip if the window is in the future
-            if (( WINDOW_START_TS > CURRENT_TIMESTAMP )); then
+            # Skip if the window is before the start date
+            if (( WINDOW_END_TS < START_TIMESTAMP )); then
                 continue
             fi
 
-            # Adjust WINDOW_END_TS if it goes beyond the current time
-            if (( WINDOW_END_TS > CURRENT_TIMESTAMP )); then
-                WINDOW_END_TS=$CURRENT_TIMESTAMP
+            # Adjust WINDOW_START_TS if it is before the start date
+            if (( WINDOW_START_TS < START_TIMESTAMP )); then
+                WINDOW_START_TS=$START_TIMESTAMP
             fi
 
             # Build the Prometheus query
@@ -140,15 +138,14 @@ collect_metrics() {
             daily_values["$day_offset"]="$VALUE"
         done
 
-        # **Handle Per Day Metrics Separately**
+        # Handle Per Day Metrics
         for (( day_offset=0; day_offset<=DAYS_TO_PROCESS; day_offset++ )); do
             VALUE="${daily_values[$day_offset]:-0}"
-            # Example metric format: metric_name{date="2024-10-10"} 123
             NEW_METRIC="${metric_name}_timespan_days{in_past=\"${day_offset}\"} ${VALUE}"
             metric_add "$NEW_METRIC"
         done
 
-        # **Define TIMESCALES Without "days"**
+        # Define TIMESCALES
         declare -A TIMESCALES
         TIMESCALES=( ["weeks"]=52 ["months"]=12 ["years"]=2 )
 
@@ -168,19 +165,13 @@ collect_metrics() {
                         ;;
                 esac
 
-                # Adjust the check to ensure we have enough data
-                if (( DAYS_TO_SUM > (DAYS_TO_PROCESS + 1) )); then
+                # Skip if not enough data
+                if (( DAYS_TO_SUM > DAYS_TO_PROCESS + 1 )); then
                     continue
                 fi
 
-                # Set the maximum day offset to sum
-                MAX_DAY_OFFSET=$(( DAYS_TO_SUM - 1 ))
-                if (( MAX_DAY_OFFSET > DAYS_TO_PROCESS )); then
-                    MAX_DAY_OFFSET=$DAYS_TO_PROCESS
-                fi
-
                 SUM=0
-                for (( day_offset=0; day_offset<=MAX_DAY_OFFSET; day_offset++ )); do
+                for (( day_offset=0; day_offset<DAYS_TO_SUM; day_offset++ )); do
                     VALUE="${daily_values[$day_offset]:-0}"
                     SUM=$(echo "$SUM + $VALUE" | bc)
                 done
