@@ -1,7 +1,7 @@
 # -------------------------------
 # Builder Stage
 # -------------------------------
-FROM golang:1.20-buster AS builder
+FROM golang:1.22-bookworm AS builder
 
 # Set environment variables for consistency
 ENV APP_DIR=/app
@@ -24,7 +24,7 @@ RUN go build -o app .
 # -------------------------------
 # Final Stage
 # -------------------------------
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 # Set environment variables
 ENV BIN_DIR=/usr/local/bin
